@@ -8,16 +8,22 @@ from sklearn.model_selection import cross_val_score
 from sklearn.feature_selection import mutual_info_classif
 import random
 
-def chunk_list(input_list, chunk_size):
-    return [input_list[i:i + chunk_size] for i in range(0, len(input_list), chunk_size)]
+def calculate_SU(X, y):
+    mi = mutual_info_classif(X, y)
+    max_mi = np.max(mi)
+    su_values = mi / max_mi  # 归一化互信息值以得到SU值
+    return su_values
 
-
+def sort_features_by_SU(X, y):
+    su_values = calculate_SU(X, y)
+    sorted_indices = np.argsort(su_values)[::-1]  # 根据SU值降序排序特征索引
+    return X[:, sorted_indices], sorted_indices
 def init_PSO(pN, dim):
-    X = np.zeros((pN, dim))  
-    pbesti = np.zeros(dim)  
-    p_fit = np.zeros(pN)  
-    for i in range(pN): 
-        for j in range(dim):  
+    X = np.zeros((pN, dim))  # 所有粒子的位置
+    pbesti = np.zeros(dim)  # 个体经历的最佳位置和全局最佳位置
+    p_fit = np.zeros(pN)  # 每个个体的历史最佳适应值
+    for i in range(pN):  # 外层循环遍历种群中每个粒子
+        for j in range(dim):  # 内层循环遍历种群中粒子的每个维度
             r = np.random.uniform(0,1)
             if r > 0.67:
                 X[i][j] = 1
@@ -31,113 +37,106 @@ def init_PSO(pN, dim):
             pbesti[j] = 0
     gbest = pbesti
     return X, pbesti, gbest, p_fit
-def chaotic_jump_probability(stagnation_i):
-    return 1 / (1 + np.exp(2 - stagnation_i))
+
+
+
+
+def chaotic_jump_probability(si):
+    return 1 / (1 + np.exp(2 - si))
 
 def chaotic_sequence(k):
     if k == 0:
         return 0.13
-    elif k >= 1:
-        return 4 * chaotic_sequence(k - 1) * (1 - chaotic_sequence(k - 1))
-
-def divide_into_neighborhoods(pi, pbesti, T):
-    pi_list = chunk_list(pi, T)
-    pbesti_list = chunk_list(pbesti, T)
-    return pi_list, pbesti_list
+    else:
+        return (4 * chaotic_sequence(k - 1) * (1 - chaotic_sequence(k - 1)))
+def divide_into_neighborhoods(D, T):
+    neighborhoods = [list(range(i, min(i + T, D))) for i in range(0, D, T)]
+    return neighborhoods
 
 def dir(i, N):
     if i <= N / 2:
         return 1
     else:
         return 0
-
-def check_remainder_not_zero(features_number,T):
-    if features_number % T != 0:
-        return True
-    else:
-        return False
-def feature_selected(pbesti, k, T):
+def feature_selected(pi, pbesti, k, T):
     ai = []
     for i in range(T):
-        ai.append(pbesti[i + (k-1) * T])
+        if pi[i + (k - 1) * T] == pbesti[i + (k - 1) * T] == 1:
+            ai.append(1)
+        elif pi[i + (k - 1) * T] == pbesti[i + (k - 1) * T] == 0:
+            ai.append(0)
+        else:
+            ai.append(pi[i])
     return ai
-def calculating_accuracy(xi):
-    file_path = r'your dataset'
-    X_scaled, y = load_and_prepare_data(file_path)
-    mean_accuracy = KNN_with_cross_validation(X_scaled, y, xi)
-    return mean_accuracy
-def update_mechanism(xi, pbesti, gbest, Pcj_i, d, i, FEs, stagnation):
-    xi = np.array(xi)
+def update_mechanism(xi, pbesti, gbest, Pcj_i,d,FEs):
+    xi=np.array(xi)
     r = np.random.rand()
     if r > Pcj_i:
         xi[d] = np.random.normal((pbesti[d] + gbest[d]) / 2, abs(pbesti[d] - gbest[d]))
-        if xi[d] > 0.5: 
+        if xi[d] > 0.5:
             xi[d] = 1
         else:
             xi[d] = 0
     else:
         zk = chaotic_sequence(FEs)
         xi[d] = pbesti[d] * (1 + (2 * zk - 1))
-        if xi[d] > 0.5:
+        if xi[d]> 0.5:
             xi[d] = 1
         else:
             xi[d] = 0
-    if len(stagnation) <= i:
-        stagnation += [0] * (i - len(stagnation) + 1)
-    if calculating_accuracy(xi) > calculating_accuracy(pbesti):
-        pbesti = xi
-        stagnation[i]=0
-    else:
-        stagnation[i] = stagnation[i]+1
-    return xi[d], stagnation, pbesti
-# Input: The ith particle pi to be updated, the total number of features D, the number of features T in feature neighborhood, the
+    return xi[d]
+# Input: The ith particle pi to be updated, the total number of features D, the number of features T in feature neighborhood, the
 # historical optimal position pbesti of pi, the position xi of pi
 # Output: The updated particle pi
-
-def update(pi, D, T, pbesti, gbest, N, i, FEs, direction):
-    p_besti = pbesti
-    stagnation = []
-    for r in range(N):
-        stagnation.append(0)
+def update(pi, D, T, pbesti,gbest, N, i,FEs):
+    a=gbest
+    p_besti=pbesti
     for j in range(D):
         # Calculate neighborhood index
         k = int(j / T) + 1
-        # Check direction
-        if direction[i] == 1:
+
+         # Check direction
+        if dir(i, N) == 1:
             # If no feature in neighborhood k is selected in pbesti
-            if not any(feature_selected(p_besti, k, T)):
+            if not any(feature_selected(pi, p_besti, k, T)):
                 pi[j] = p_besti[j]
                 continue
-        elif direction[i] == 0:
+        else:
             # If all features in neighborhood k are selected in pbesti
-            if all(feature_selected(p_besti, k, T)):
+            if all(feature_selected(pi, p_besti, k, T)):
                 pi[j] = p_besti[j]
                 continue
+
         # Use any chosen position update mechanism to update xi,j
-        Pcj_i = chaotic_jump_probability(stagnation[i])
-        pi[j], stagnation, p_besti = update_mechanism(pi, p_besti, gbest, Pcj_i, i, j, FEs, stagnation)
-        for m in range(len(pi)):
-            if pi[m] > 0.5:
-                pi[m] = 1
+        Pcj_i = chaotic_jump_probability(FEs)
+        pi[j] = update_mechanism(pi, p_besti, gbest, Pcj_i, j,FEs)
+        p_besti = evaluate_fitness(pi,p_besti,X_scaled,y)
+        for i in range(len(pi)):
+            if pi[i] > 0.5:
+                pi[i] = 1
             else:
-                 pi[m] = 0
-        for n in range(len(p_besti)):
-            if p_besti[n] > 0.5:
-                p_besti[n] = 1
+                 pi[i] = 0
+        for i in range(len(p_besti)):
+            if p_besti[i] > 0.5:
+                p_besti[i] = 1
             else:
-                p_besti[n] = 0
-    return pi, p_besti
-def evaluate_fitness(xi, pbesti):
-    xi_fitness_value = calculate_accuracy(xi)
-    pbesti_fitness_value = calculate_accuracy(pbesti)
+                p_besti[i] = 0
+        return pi, p_besti
+
+
+
+def evaluate_fitness(xi,pbesti,X_scaled,y):
+    xi_fitness_value = calculate_accuracy(xi,X_scaled,y)
+    pbesti_fitness_value = calculate_accuracy(pbesti,X_scaled,y)
     if xi_fitness_value > pbesti_fitness_value:
         pbesti = xi
     return pbesti
+
 def evaluate_feature_number(xi):
     xi_feature_number = np.sum(xi == 1)
     return xi_feature_number
 
-def update_gbest(swarm, gbest_t, fitness_values, N, gbest_accuracy, gbest_feature_number):
+def update_gbest(swarm, gbest_t, fitness_values, N, gbest_accuracy,gbest_feature_number):
     # Update the global best solution gbest based on fitness values
     # Replace with actual implementation
     for i in range(N):
@@ -149,23 +148,27 @@ def update_gbest(swarm, gbest_t, fitness_values, N, gbest_accuracy, gbest_featur
             gbest = swarm[i]
         else:
             gbest = gbest_t
-        gbest_feature_number = evaluate_feature_number(gbest)
     return gbest, gbest_accuracy, gbest_feature_number
+
+
+
+    best_index = np.argmax(fitness_values)
+    print(swarm[best_index].copy())
+    return swarm[best_index].copy()
 
 def calculate_AI(subswarm, pbest_history, generation, window_size):
     size_subswarm = subswarm
     sum_ai = 0.0
 
-    for particle_index in range(len(size_subswarm)):
+    for particle_index in range(size_subswarm):
         if generation > window_size:
             pbest_index = pbest_history.iloc[particle_index, generation]
             pbest_w_index = pbest_history.iloc[particle_index, (generation - window_size)]
             fitness_difference = pbest_index - pbest_w_index
             sum_ai += fitness_difference
-        else:
-            sum_ai = pbest_index
 
-    ai = (1.0 / size_subswarm) * sum_ai
+
+    ai = 1.0 / size_subswarm * sum_ai
     return ai
 
 
@@ -173,23 +176,29 @@ def calculate_AF(subswarm, pbest_history, generation):
     size_subswarm = subswarm
     sum_af = 0.0
 
-    for particle_index in range(len(size_subswarm)):
+    for particle_index in range(size_subswarm):
         pbest_index = pbest_history.iloc[particle_index,generation]  # Use the latest generation pbest
         sum_af += pbest_index
 
-    af = (1.0 / size_subswarm) * sum_af
+    af = 1.0 / size_subswarm * sum_af
     return af
 
 def change_direction(direction, pbest_history, generation, window_size):
+    # Step 1
     import random
     nl = direction.count(1)
     nu = direction.count(0)
     print(nl)
     print(nu)
+    # Step 2
     if nl == 0 or nu == 0:
         return direction
+
+    # Step 5
     AIl = calculate_AI(nl, pbest_history, generation, window_size)
     AIu = calculate_AI(nu, pbest_history, generation, window_size)
+
+    # Step 6-13
     if AIl < AIu:
         indices = [i for i, value in enumerate(direction) if value == 1]
         pr = np.random.choice(indices)
@@ -198,12 +207,13 @@ def change_direction(direction, pbest_history, generation, window_size):
         indices = [i for i, value in enumerate(direction) if value == 0]
         pr = np.random.choice(indices)
         direction[pr] = 1
+
+    # Step 15-23
     if AIl == AIu:
         AFl = calculate_AF(nl, pbest_history, generation)
         AFu = calculate_AF(nu, pbest_history, generation)
 
         if AFl < AFu:
-
             indices = [i for i, value in enumerate(direction) if value == 1]
             pr = np.random.choice(indices)
             direction[pr] = 0
@@ -215,26 +225,34 @@ def change_direction(direction, pbest_history, generation, window_size):
     return direction
 
 def load_and_prepare_data(file_path):
+    # 从文件加载数据
     data = scio.loadmat(file_path)
-    X = pd.DataFrame(data['X']).values 
-    y = pd.DataFrame(data['Y']).values.ravel()  
+    X = pd.DataFrame(data['X']).values  # 转换为numpy数组
+
+    y = pd.DataFrame(data['Y']).values.ravel()  # 转换为一维数组
+
+    # 使用 MinMaxScaler 进行特征缩放
     scaler = MinMaxScaler()
     X_scaled = scaler.fit_transform(X)
+
     return X_scaled, y
 
 def KNN_with_cross_validation(X_scaled, y, xi):
+    # 使用xi选择特征
     boolean_array = xi.astype(bool)
     X_selected = X_scaled[:, boolean_array]
-    knn_classifier = KNeighborsClassifier(n_neighbors=5)
+
+    # 创建 k-NN 分类器，设置 k 值
+    knn_classifier = KNeighborsClassifier(n_neighbors=3)
+
+    # 进行5倍交叉验证并计算平均精度
     scores = cross_val_score(knn_classifier, X_selected, y, cv=5)
     mean_accuracy = np.mean(scores)
-    print("5倍交叉验证的平均分类精度:", mean_accuracy)
     return mean_accuracy
-def calculate_accuracy(xi):
-    file_path = r'your dataset'
-    X_scaled, y = load_and_prepare_data(file_path)
+def calculate_accuracy(xi,X_scaled,y):
+    # 调整为您的数据文件路径
+    file_path = r'C:\Users\11741\Pycharm\pythonProject1\data\GLIOMA (1).mat'
     mean_accuracy = KNN_with_cross_validation(X_scaled, y, xi)
-    print("选定特征的5倍交叉验证平均分类精度:", mean_accuracy)
     return mean_accuracy
 
 def BDFF(D,T,MAX_FE,N,W,pbest_history,X_scaled,y):
@@ -278,7 +296,7 @@ def BDFF(D,T,MAX_FE,N,W,pbest_history,X_scaled,y):
         print(direction)
 
         k += 1
-        FEs += 1 # Assuming each particle evaluation counts as one fitness evaluation
+        FEs += N # Assuming each particle evaluation counts as one fitness evaluation
 
     return gbest
 
@@ -291,19 +309,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import MinMaxScaler
-
-
-data = scio.loadmat(r'your dataset')
+# 创建一个小型的分类数据集
+data = scio.loadmat(r'C:\Users\11741\Pycharm\pythonProject1\data\GLIOMA (1).mat')
 dic1 = data['X']
 dic2 = data['Y']
 df1 = pd.DataFrame(dic1)
 df2 = pd.DataFrame(dic2)
-feats = df1
+feats = df1  # 导入特征数据集
 labels = df2
-
 MAX_FE = 250
 N = 20
 pb_history = [[None for _ in range(MAX_FE)] for _ in range(N)]
+file_path = r'C:\Users\11741\Pycharm\pythonProject1\data\GLIOMA (1).mat'
+X_scaled, y = load_and_prepare_data(file_path)
 pbest_history = pd.DataFrame(pb_history)
-
-gbest = BDFF(len(df1.columns), 3, 250, 20, 10, pbest_history)
+gbest = BDFF(len(df1.columns),3,250,20,10,pbest_history,X_scaled,y)

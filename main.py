@@ -237,9 +237,10 @@ def calculate_accuracy(xi):
     print("选定特征的5倍交叉验证平均分类精度:", mean_accuracy)
     return mean_accuracy
 
-def BDFF(D,T,MAX_FE,N,W,pbest_history):
+def BDFF(D,T,MAX_FE,N,W,pbest_history,X_scaled,y):
     FEs=0
-    data = scio.loadmat(r'your dataset')
+    # 第一步
+    data = scio.loadmat(r'C:\Users\11741\Pycharm\pythonProject1\data\GLIOMA (1).mat')
     print(type(data))
     dic1 = data['X']
     dic2 = data['Y']
@@ -247,26 +248,31 @@ def BDFF(D,T,MAX_FE,N,W,pbest_history):
     df2 = pd.DataFrame(dic2)
     dim=len(df1.columns)
     X, pbesti, gbest, p_fit = init_PSO(N, dim)
-    gbest_accuracy = calculate_accuracy(gbest)
+    gbest_accuracy = calculate_accuracy(gbest, X_scaled,y)
     gbest_feature_number = evaluate_feature_number(gbest)
     swarm = X
     target = df2
+    # 第二步
     direction = []
     for i in range(N):
         if i <= N / 2:
             direction.append(1)
         else:
             direction.append(0)
+    # 第三步
+    # 第四步，使用SU策略，目前还不知道怎么搞
+    neighborhoods = divide_into_neighborhoods(D, T)
     k=1
     while FEs < MAX_FE:
         for i in range(N):
             xi = swarm[i]
-            pbesti = evaluate_fitness(xi,pbesti)
-            pbest_history.iloc[i,FEs] = calculate_accuracy(pbesti)
-            xi, pbesti = update(xi,len(df1.columns),3,pbesti,gbest,N,i,FEs,direction)
+            pbesti = evaluate_fitness(xi,pbesti,X_scaled,y,)
+            pbest_history.iloc[i,FEs] = calculate_accuracy(pbesti,X_scaled,y)
+            xi, pbesti = update(xi,len(df1.columns),3,pbesti,gbest,N,i,FEs)
             swarm[i] = xi
-            gbest, gbest_accuracy, gbest_feature_number = update_gbest(swarm, gbest, [calculate_accuracy(xi) for xi in swarm], N,gbest_accuracy, gbest_feature_number)
-            print(gbest_accuracy, gbest_feature_number,direction[i])
+
+        gbest, gbest_accuracy, gbest_feature_number = update_gbest(swarm, gbest,[calculate_accuracy(xi,X_scaled,y) for xi in swarm],N,gbest_accuracy,gbest_feature_number)
+        print(np.sum(gbest == 1))
         if k % W == 0:
             direction = change_direction(direction, pbest_history, FEs, W)
         print(direction)

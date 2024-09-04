@@ -7,6 +7,11 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import cross_val_score
 from sklearn.feature_selection import mutual_info_classif
 import random
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import MinMaxScaler
 
 def chunk_list(input_list, chunk_size):
     return [input_list[i:i + chunk_size] for i in range(0, len(input_list), chunk_size)]
@@ -16,11 +21,11 @@ def init_PSO(pN, dim, T):
     if dim % T != 0:
         remainder = dim % T
         dim = dim + (T-remainder)
-    X = np.zeros((pN, dim))  # 所有粒子的位置
-    pbesti = np.zeros(dim)  # 个体经历的最佳位置和全局最佳位置
-    p_fit = np.zeros(pN)  # 每个个体的历史最佳适应值
-    for i in range(pN):  # 外层循环遍历种群中每个粒子
-        for j in range(dim):  # 内层循环遍历种群中粒子的每个维度
+    X = np.zeros((pN, dim))  
+    pbesti = np.zeros(dim) 
+    p_fit = np.zeros(pN)  
+    for i in range(pN):  
+        for j in range(dim):  
             r = np.random.uniform(0,1)
             if r > 0.67:
                 X[i][j] = 1
@@ -65,7 +70,7 @@ def feature_selected(pbesti, k, T):
         ai.append(pbesti[i + (k-1) * T])
     return ai
 def calculating_accuracy(xi,T):
-    file_path = r'C:\Users\11741\Pycharm\pythonProject1\data\warpAR10P.mat'
+    file_path = r'your file'
     X_scaled, y = load_and_prepare_data(file_path,T)
     mean_accuracy = KNN_with_cross_validation(X_scaled, y, xi)
     return mean_accuracy
@@ -74,7 +79,7 @@ def update_mechanism(xi, pbesti, gbest, Pcj_i, d, i, FEs, stagnation,T):
     r = np.random.rand()
     if r > Pcj_i:
         xi[d] = np.random.normal((pbesti[d] + gbest[d]) / 2, abs(pbesti[d] - gbest[d]))
-        if xi[d] > 0.5: # 该参数应设置为多少
+        if xi[d] > 0.5: 
             xi[d] = 1
         else:
             xi[d] = 0
@@ -228,54 +233,44 @@ def change_direction(direction, pbest_history, generation, window_size):
 def load_and_prepare_data(file_path, T):
     # 从文件加载数据
     data = scio.loadmat(file_path)
-    X = pd.DataFrame(data['X']).values  # 转换为numpy数组
-    y = pd.DataFrame(data['Y']).values.ravel()  # 转换为一维数组
+    X = pd.DataFrame(data['X']).values  
+    y = pd.DataFrame(data['Y']).values.ravel()  
     dim = X.shape[1]
     pN = X.shape[0]
     remainder = dim % T
     if remainder != 0 :
         new_data = np.zeros((pN, T-remainder))
-        for i in range(pN):  # 外层循环遍历种群中每个粒子
-            for j in range(T-remainder):  # 内层循环遍历种群中粒子的每个维度
+        for i in range(pN):  
+            for j in range(T-remainder):  
                 r = np.random.uniform(0, 1)
                 if r > 0.67:
                     new_data[i][j] = 1
                 else:
                     new_data[i][j] = 0
         X = np.hstack((X, new_data))
-    # 使用 MinMaxScaler 进行特征缩放
     scaler = MinMaxScaler()
     X_scaled = scaler.fit_transform(X)
 
     return X_scaled, y
 
 def KNN_with_cross_validation(X_scaled, y, xi):
-    # 使用xi选择特征
     boolean_array = xi.astype(bool)
     X_selected = X_scaled[:, boolean_array]
-
-    # 创建 k-NN 分类器，设置 k 值
     knn_classifier = KNeighborsClassifier(n_neighbors=5)
-
-    # 进行5倍交叉验证并计算平均精度
     scores = cross_val_score(knn_classifier, X_selected, y, cv=5)
     mean_accuracy = np.mean(scores)
-
-    print("5倍交叉验证的平均分类精度:", mean_accuracy)
-
+    print("mean acc:", mean_accuracy)
     return mean_accuracy
 def calculate_accuracy(xi,T):
-    # 调整为您的数据文件路径
-    file_path = r'C:\Users\11741\Pycharm\pythonProject1\data\warpAR10P.mat'
+    file_path = r'your file'
     X_scaled, y = load_and_prepare_data(file_path,T)
     mean_accuracy = KNN_with_cross_validation(X_scaled, y, xi)
-    print("选定特征的5倍交叉验证平均分类精度:", mean_accuracy)
+    print("mean acc:", mean_accuracy)
     return mean_accuracy
 
 def BDFF(D,T,MAX_FE,N,W,pbest_history):
     FEs=0
-    # 第一步
-    data = scio.loadmat(r'C:\Users\11741\Pycharm\pythonProject1\data\warpAR10P.mat')
+    data = scio.loadmat(r'your file')
     print(type(data))
     dic1 = data['X']
     dic2 = data['Y']
@@ -287,15 +282,12 @@ def BDFF(D,T,MAX_FE,N,W,pbest_history):
     gbest_feature_number = evaluate_feature_number(gbest)
     swarm = X
     target = df2
-    # 第二步
     direction = []
     for i in range(N):
         if i <= N / 2:
             direction.append(1)
         else:
             direction.append(0)
-    # 第三步
-    # 第四步，使用SU策略，目前还不知道怎么搞
     k=1
     while FEs < MAX_FE:
         for i in range(N):
@@ -317,24 +309,13 @@ def BDFF(D,T,MAX_FE,N,W,pbest_history):
     return P
 
 # examples
-import numpy as np
-import pandas as pd
-import scipy.io as scio
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import MinMaxScaler
-
-# 创建一个小型的分类数据集
 data = scio.loadmat(r'C:\Users\11741\Pycharm\pythonProject1\data\warpAR10P.mat')
 dic1 = data['X']
 dic2 = data['Y']
 df1 = pd.DataFrame(dic1)
 df2 = pd.DataFrame(dic2)
-feats = df1  # 导入特征数据集
+feats = df1  
 labels = df2
-
 MAX_FE = 250
 N = 20
 pb_history = [[None for _ in range(MAX_FE)] for _ in range(N)]

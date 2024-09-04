@@ -8,17 +8,6 @@ from sklearn.model_selection import cross_val_score
 from sklearn.feature_selection import mutual_info_classif
 import random
 
-def calculate_SU(X, y):
-    mi = mutual_info_classif(X, y)
-    max_mi = np.max(mi)
-    su_values = mi / max_mi  # 归一化互信息值以得到SU值
-    return su_values
-
-def sort_features_by_SU(X, y):
-    su_values = calculate_SU(X, y)
-    sorted_indices = np.argsort(su_values)[::-1]  # 根据SU值降序排序特征索引
-    return X[:, sorted_indices], sorted_indices
-
 def chunk_list(input_list, chunk_size):
     return [input_list[i:i + chunk_size] for i in range(0, len(input_list), chunk_size)]
 
